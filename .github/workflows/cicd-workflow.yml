@@ -6,21 +6,24 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
+      
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+      
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
         with:
-          mask-password: 'true'
+          mask-password: true
+      
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
@@ -28,23 +31,22 @@ jobs:
           IMAGE_TAG: latest
           REPOSITORY: nodejs
         run: |
-          # Build a docker container and
-          # push it to ECR so that it can
-          # be deployed to ECS.
           docker build -t $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "::set-output name=image::$ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG" # Set output for later steps
+      
       - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
+        id: render-task-definition
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: nodejs-app
+          task-definition: nodejs-app.json
           container-name: nodejs
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ steps.build-image.outputs.image }} # Use the output of the previous step
+      
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          task-definition: ${{ steps.render-task-definition.outputs.task-definition }}
           service: nodejs-service
           cluster: app-cluster
           wait-for-service-stability: true
