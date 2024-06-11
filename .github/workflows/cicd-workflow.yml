@@ -28,19 +28,20 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: nodejs
           IMAGE_TAG: latest
+          REPOSITORY: nodejs
         run: |
           docker build -t $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG" # Set output for later steps
       
-      - name: Render Amazon ECS task definition
+      - name: Fill in the new image ID in the Amazon ECS task definition
         id: render-task-definition
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: nodejs-app.json
+          task-definition: nodejs-app
           container-name: nodejs
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ steps.build-image.outputs.image }} # Use the output of the previous step
       
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
